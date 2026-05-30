@@ -122,8 +122,8 @@ class _IdleView extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       children: [
         _AppHeader(
-          actionIcon: Icons.list_rounded,
-          onAction: controller.openHistory,
+          actionIcon: Icons.settings_outlined,
+          onAction: controller.openSettings,
         ),
         const SizedBox(height: 40),
         const Align(
@@ -151,7 +151,12 @@ class _IdleView extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 30),
+        const SizedBox(height: 12),
+        Text(
+          'Réciteur audio: ${_reciterLabelById(controller.selectedReciterId)}',
+          style: const TextStyle(fontSize: 14, color: Color(0xFF7B8588)),
+        ),
+        const SizedBox(height: 22),
         const _OrbWidget(size: 150),
         const SizedBox(height: 48),
         InkWell(
@@ -178,6 +183,12 @@ class _IdleView extends StatelessWidget {
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 16, color: Color(0xFF7D8588)),
         ),
+        const SizedBox(height: 14),
+        TextButton.icon(
+          onPressed: controller.openHistory,
+          icon: const Icon(Icons.history_rounded),
+          label: const Text('Voir l’historique'),
+        ),
         const SizedBox(height: 10),
       ],
     );
@@ -194,7 +205,10 @@ class _RecordingView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.only(bottom: 12),
       children: [
-        const _AppHeader(),
+        _AppHeader(
+          actionIcon: Icons.settings_outlined,
+          onAction: controller.openSettings,
+        ),
         const SizedBox(height: 26),
         const DecoratedBox(
           decoration: BoxDecoration(
@@ -276,7 +290,10 @@ class _AnalyzingView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.only(bottom: 12),
       children: [
-        const _AppHeader(),
+        _AppHeader(
+          actionIcon: Icons.settings_outlined,
+          onAction: controller.openSettings,
+        ),
         const SizedBox(height: 24),
         const _OrbWidget(size: 150),
         const SizedBox(height: 22),
@@ -335,8 +352,8 @@ class _ResultView extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _AppHeader(
-          actionIcon: Icons.check_rounded,
-          onAction: controller.backToIdle,
+          actionIcon: Icons.settings_outlined,
+          onAction: controller.openSettings,
         ),
         const SizedBox(height: 26),
         Text(
@@ -370,6 +387,11 @@ class _ResultView extends StatelessWidget {
             ],
           ),
         ),
+        const SizedBox(height: 8),
+        Text(
+          'Réciteur: ${_reciterLabelById(controller.selectedReciterId)}',
+          style: const TextStyle(fontSize: 14, color: Color(0xFF7B8588)),
+        ),
         const SizedBox(height: 12),
         const Divider(color: Color(0xFFBE9F63), thickness: 4),
         const SizedBox(height: 12),
@@ -386,38 +408,74 @@ class _ResultView extends StatelessWidget {
               itemBuilder: (_, index) => _SequenceAyahCard(ayah: ayahs[index]),
             ),
           ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         Row(
           children: [
             Expanded(
-              child: OutlinedButton(
-                onPressed: controller.openHistory,
+              child: OutlinedButton.icon(
+                onPressed: controller.toggleResultAudioPlayback,
                 style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(30),
                   ),
                 ),
-                child: const Text('Historique', style: TextStyle(fontSize: 20)),
+                icon: controller.isAudioLoading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        controller.isResultAudioPlaying
+                            ? Icons.stop_rounded
+                            : Icons.play_arrow_rounded,
+                      ),
+                label: Text(
+                  controller.isResultAudioPlaying ? 'Stop' : 'Écouter',
+                  style: const TextStyle(fontSize: 18),
+                ),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              flex: 2,
-              child: FilledButton.icon(
-                onPressed: controller.backToIdle,
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF08161B),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+              child: OutlinedButton(
+                onPressed: controller.openHistory,
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(30),
                   ),
                 ),
-                icon: const Icon(Icons.mic_none_rounded),
-                label: const Text('Nouveau', style: TextStyle(fontSize: 20)),
+                child: const Text('Historique', style: TextStyle(fontSize: 18)),
               ),
             ),
           ],
+        ),
+        if (controller.errorMessage != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            controller.errorMessage!,
+            style: const TextStyle(fontSize: 14, color: Color(0xFFB95038)),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: controller.backToIdle,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF08161B),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(30),
+              ),
+            ),
+            icon: const Icon(Icons.mic_none_rounded),
+            label: const Text('Nouveau', style: TextStyle(fontSize: 20)),
+          ),
         ),
       ],
     );
@@ -434,7 +492,10 @@ class _ErrorView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.only(bottom: 12),
       children: [
-        const _AppHeader(actionIcon: Icons.error_outline_rounded),
+        _AppHeader(
+          actionIcon: Icons.settings_outlined,
+          onAction: controller.openSettings,
+        ),
         const SizedBox(height: 26),
         Container(
           width: 190,
@@ -529,8 +590,8 @@ class _HistoryView extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _AppHeader(
-          actionIcon: Icons.close_rounded,
-          onAction: controller.backToIdle,
+          actionIcon: Icons.settings_outlined,
+          onAction: controller.openSettings,
         ),
         const SizedBox(height: 24),
         const Text(
@@ -563,6 +624,123 @@ class _HistoryView extends StatelessWidget {
                     return _HistoryCard(item: item);
                   },
                 ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            onPressed: controller.backToIdle,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF08161B),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(30),
+              ),
+            ),
+            child: const Text('Fermer', style: TextStyle(fontSize: 18)),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SettingsView extends StatelessWidget {
+  const _SettingsView({required this.controller});
+
+  final HomeCubit controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _AppHeader(
+          actionIcon: Icons.close_rounded,
+          onAction: controller.backToIdle,
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'Paramètres',
+          style: TextStyle(
+            fontFamily: 'Times New Roman',
+            fontSize: 26,
+            color: Color(0xFF172126),
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Choisis le réciteur utilisé pendant la lecture audio.',
+          style: TextStyle(fontSize: 16, color: Color(0xFF6C777B)),
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: ListView.separated(
+            itemCount: kReciterOptions.length,
+            separatorBuilder: (_, index) => const SizedBox(height: 8),
+            itemBuilder: (_, index) {
+              final reciter = kReciterOptions[index];
+              final isSelected = reciter.id == controller.selectedReciterId;
+              return InkWell(
+                onTap: () => controller.setSelectedReciter(reciter.id),
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isSelected
+                          ? const Color(0xFFB89A5C)
+                          : const Color(0xFFE4E7E6),
+                      width: isSelected ? 1.8 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          reciter.label,
+                          style: TextStyle(
+                            fontSize: 17,
+                            color: isSelected
+                                ? const Color(0xFF1A262B)
+                                : const Color(0xFF344248),
+                            fontWeight: isSelected
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      if (isSelected)
+                        const Icon(
+                          Icons.check_circle_rounded,
+                          color: Color(0xFF2E6F5A),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            onPressed: controller.backToIdle,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF08161B),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(32),
+              ),
+            ),
+            child: const Text('Fermer', style: TextStyle(fontSize: 18)),
+          ),
         ),
       ],
     );

@@ -2,7 +2,16 @@ import 'package:ayat_finder/features/recognition/domain/entities/detection_resul
 import 'package:ayat_finder/features/recognition/domain/entities/history_entry.dart';
 import 'package:flutter/foundation.dart';
 
-enum AppPhase { onboarding, idle, recording, analyzing, result, error, history }
+enum AppPhase {
+  onboarding,
+  idle,
+  recording,
+  analyzing,
+  result,
+  error,
+  history,
+  settings,
+}
 
 @immutable
 class HomeState {
@@ -17,6 +26,9 @@ class HomeState {
     required this.transcriptionDone,
     required this.matchingDone,
     required this.currentJobId,
+    required this.selectedReciterId,
+    required this.isAudioLoading,
+    required this.isResultAudioPlaying,
   }) : history = List<HistoryEntry>.unmodifiable(history);
 
   factory HomeState.initial() {
@@ -31,6 +43,9 @@ class HomeState {
       transcriptionDone: false,
       matchingDone: false,
       currentJobId: null,
+      selectedReciterId: '',
+      isAudioLoading: false,
+      isResultAudioPlaying: false,
     );
   }
 
@@ -44,6 +59,9 @@ class HomeState {
   final bool transcriptionDone;
   final bool matchingDone;
   final String? currentJobId;
+  final String selectedReciterId;
+  final bool isAudioLoading;
+  final bool isResultAudioPlaying;
 
   static const Object _unset = Object();
 
@@ -58,6 +76,9 @@ class HomeState {
     bool? transcriptionDone,
     bool? matchingDone,
     Object? currentJobId = _unset,
+    String? selectedReciterId,
+    bool? isAudioLoading,
+    bool? isResultAudioPlaying,
   }) {
     return HomeState(
       phase: phase ?? this.phase,
@@ -76,6 +97,9 @@ class HomeState {
       currentJobId: identical(currentJobId, _unset)
           ? this.currentJobId
           : currentJobId as String?,
+      selectedReciterId: selectedReciterId ?? this.selectedReciterId,
+      isAudioLoading: isAudioLoading ?? this.isAudioLoading,
+      isResultAudioPlaying: isResultAudioPlaying ?? this.isResultAudioPlaying,
     );
   }
 
@@ -94,7 +118,10 @@ class HomeState {
         other.audioReceived == audioReceived &&
         other.transcriptionDone == transcriptionDone &&
         other.matchingDone == matchingDone &&
-        other.currentJobId == currentJobId;
+        other.currentJobId == currentJobId &&
+        other.selectedReciterId == selectedReciterId &&
+        other.isAudioLoading == isAudioLoading &&
+        other.isResultAudioPlaying == isResultAudioPlaying;
   }
 
   @override
@@ -110,6 +137,9 @@ class HomeState {
       transcriptionDone,
       matchingDone,
       currentJobId,
+      selectedReciterId,
+      isAudioLoading,
+      isResultAudioPlaying,
     );
   }
 }

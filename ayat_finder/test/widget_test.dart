@@ -7,14 +7,14 @@
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:ayat_finder/core/di/service_locator.dart';
 import 'package:ayat_finder/src/app.dart';
 
 void main() {
-  testWidgets('Ayat Finder renders app shell', (
-    WidgetTester tester,
-  ) async {
+  testWidgets('Ayat Finder renders app shell', (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
     tester.view.devicePixelRatio = 1.0;
     tester.view.physicalSize = const Size(1400, 3000);
     addTearDown(tester.view.resetPhysicalSize);
@@ -24,6 +24,6 @@ void main() {
     await tester.pumpWidget(const AyatFinderApp());
     await tester.pump();
 
-    expect(find.text('ayat detector'), findsOneWidget);
+    expect(find.textContaining('Ayat Detector'), findsOneWidget);
   });
 }

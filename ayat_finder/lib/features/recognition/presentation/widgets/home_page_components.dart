@@ -257,3 +257,12 @@ String _surahName(int surahNumber) {
 
   return names[surahNumber] ?? 'Sourate $surahNumber';
 }
+
+String _reciterLabelById(String reciterId) {
+  for (final reciter in kReciterOptions) {
+    if (reciter.id == reciterId) {
+      return reciter.label;
+    }
+  }
+  return kReciterOptions.first.label;
+}

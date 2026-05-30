@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:ayat_finder/core/constants/reciters.dart';
 import 'package:ayat_finder/features/recognition/domain/entities/ayah_detection.dart';
 import 'package:ayat_finder/features/recognition/domain/entities/history_entry.dart';
 import 'package:ayat_finder/features/recognition/presentation/cubit/home_cubit.dart';
@@ -46,6 +47,7 @@ class _AyatHomePageState extends State<AyatHomePage> {
                 AppPhase.result => _ResultView(controller: controller),
                 AppPhase.error => _ErrorView(controller: controller),
                 AppPhase.history => _HistoryView(controller: controller),
+                AppPhase.settings => _SettingsView(controller: controller),
               },
             ),
           ),

@@ -2,8 +2,11 @@ import 'dart:async';
 import 'dart:developer';
 import 'dart:io';
 
+import 'package:ayat_finder/core/constants/reciters.dart';
 import 'package:ayat_finder/core/error/app_exception.dart';
 import 'package:ayat_finder/core/state/data_state.dart';
+import 'package:ayat_finder/features/recognition/data/services/quran_audio_player_service.dart';
+import 'package:ayat_finder/features/recognition/data/services/reciter_preferences_service.dart';
 import 'package:ayat_finder/features/recognition/domain/entities/detection_result.dart';
 import 'package:ayat_finder/features/recognition/domain/entities/history_entry.dart';
 import 'package:ayat_finder/features/recognition/domain/entities/job_status.dart';
@@ -22,20 +25,41 @@ class HomeCubit extends Cubit<HomeState> {
     required SubmitAudioUseCase submitAudioUseCase,
     required GetJobStatusUseCase getJobStatusUseCase,
     required GetMetadataUseCase getMetadataUseCase,
+    required ReciterPreferencesService reciterPreferencesService,
+    required QuranAudioPlayerService quranAudioPlayerService,
     AudioRecorder? recorder,
   }) : _submitAudioUseCase = submitAudioUseCase,
        _getJobStatusUseCase = getJobStatusUseCase,
        _getMetadataUseCase = getMetadataUseCase,
+       _reciterPreferencesService = reciterPreferencesService,
+       _quranAudioPlayerService = quranAudioPlayerService,
        _recorder = recorder ?? AudioRecorder(),
-       super(HomeState.initial());
+       super(HomeState.initial()) {
+    _audioPlayingSubscription = _quranAudioPlayerService.isPlayingStream.listen(
+      (isPlaying) {
+        if (isClosed) {
+          return;
+        }
+        emit(
+          state.copyWith(
+            isResultAudioPlaying: isPlaying,
+            isAudioLoading: false,
+          ),
+        );
+      },
+    );
+  }
 
   final SubmitAudioUseCase _submitAudioUseCase;
   final GetJobStatusUseCase _getJobStatusUseCase;
   final GetMetadataUseCase _getMetadataUseCase;
+  final ReciterPreferencesService _reciterPreferencesService;
+  final QuranAudioPlayerService _quranAudioPlayerService;
   final AudioRecorder _recorder;
 
   Timer? _recordingTimer;
   Timer? _pollTimer;
+  late final StreamSubscription<bool> _audioPlayingSubscription;
 
   AppPhase get phase => state.phase;
   bool get isPaused => state.isPaused;
@@ -46,11 +70,19 @@ class HomeCubit extends Cubit<HomeState> {
   bool get audioReceived => state.audioReceived;
   bool get transcriptionDone => state.transcriptionDone;
   bool get matchingDone => state.matchingDone;
+  String get selectedReciterId => state.selectedReciterId.isEmpty
+      ? kDefaultReciterId
+      : state.selectedReciterId;
+  bool get isAudioLoading => state.isAudioLoading;
+  bool get isResultAudioPlaying => state.isResultAudioPlaying;
 
   Future<void> init() async {
+    final savedReciterId = _reciterPreferencesService.getSelectedReciterId();
     final status = await Permission.microphone.status;
+
     emit(
       state.copyWith(
+        selectedReciterId: savedReciterId,
         phase: status.isGranted ? AppPhase.idle : AppPhase.onboarding,
       ),
     );
@@ -77,6 +109,8 @@ class HomeCubit extends Cubit<HomeState> {
     final temporaryDirectory = await getTemporaryDirectory();
     final filePath =
         '${temporaryDirectory.path}/rec_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
+    await _quranAudioPlayerService.stop();
 
     await _recorder.start(
       const RecordConfig(
@@ -144,6 +178,8 @@ class HomeCubit extends Cubit<HomeState> {
       return;
     }
 
+    await _quranAudioPlayerService.stop();
+
     emit(
       state.copyWith(
         phase: AppPhase.analyzing,
@@ -152,6 +188,8 @@ class HomeCubit extends Cubit<HomeState> {
         transcriptionDone: false,
         matchingDone: false,
         errorMessage: null,
+        isResultAudioPlaying: false,
+        isAudioLoading: false,
       ),
     );
 
@@ -173,16 +211,92 @@ class HomeCubit extends Cubit<HomeState> {
     }
   }
 
+  void openSettings() {
+    emit(state.copyWith(phase: AppPhase.settings));
+  }
+
+  Future<void> setSelectedReciter(String reciterId) async {
+    if (reciterId.isEmpty) {
+      return;
+    }
+
+    await _reciterPreferencesService.setSelectedReciterId(reciterId);
+    emit(state.copyWith(selectedReciterId: reciterId));
+  }
+
+  Future<void> toggleResultAudioPlayback() async {
+    if (state.isAudioLoading) {
+      return;
+    }
+
+    if (state.isResultAudioPlaying) {
+      await _quranAudioPlayerService.stop();
+      emit(state.copyWith(isResultAudioPlaying: false));
+      return;
+    }
+
+    final result = state.lastResult;
+    if (result == null || result.ayahs.isEmpty) {
+      emit(
+        state.copyWith(
+          errorMessage: 'Aucun verset disponible pour la lecture.',
+        ),
+      );
+      return;
+    }
+
+    emit(state.copyWith(isAudioLoading: true, errorMessage: null));
+
+    try {
+      await _quranAudioPlayerService.playAyahs(
+        ayahs: result.ayahs,
+        reciterId: selectedReciterId,
+      );
+      emit(state.copyWith(isAudioLoading: false, isResultAudioPlaying: true));
+    } on AppException catch (exception) {
+      emit(
+        state.copyWith(
+          isAudioLoading: false,
+          isResultAudioPlaying: false,
+          errorMessage: exception.message,
+        ),
+      );
+    } catch (_) {
+      emit(
+        state.copyWith(
+          isAudioLoading: false,
+          isResultAudioPlaying: false,
+          errorMessage: 'Lecture audio indisponible pour le moment.',
+        ),
+      );
+    }
+  }
+
   void openHistory() {
     emit(state.copyWith(phase: AppPhase.history));
   }
 
   void backToIdle() {
-    emit(state.copyWith(phase: AppPhase.idle));
+    unawaited(_quranAudioPlayerService.stop());
+    emit(
+      state.copyWith(
+        phase: AppPhase.idle,
+        isResultAudioPlaying: false,
+        isAudioLoading: false,
+      ),
+    );
   }
 
   void retry() {
-    emit(state.copyWith(phase: AppPhase.idle, errorMessage: null));
+    unawaited(_quranAudioPlayerService.stop());
+    emit(
+      state.copyWith(
+        phase: AppPhase.idle,
+        errorMessage: null,
+        isResultAudioPlaying: false,
+        isAudioLoading: false,
+      ),
+    );
   }
 
   void _startStatusPolling() {
@@ -242,6 +356,9 @@ class HomeCubit extends Cubit<HomeState> {
         matchingDone: true,
         lastResult: result,
         history: updatedHistory,
+        errorMessage: null,
+        isAudioLoading: false,
+        isResultAudioPlaying: false,
       ),
     );
   }
@@ -263,6 +380,8 @@ class HomeCubit extends Cubit<HomeState> {
         phase: AppPhase.error,
         errorMessage: exception.message,
         history: updatedHistory,
+        isAudioLoading: false,
+        isResultAudioPlaying: false,
       ),
     );
   }
@@ -277,6 +396,8 @@ class HomeCubit extends Cubit<HomeState> {
   Future<void> close() async {
     _recordingTimer?.cancel();
     _pollTimer?.cancel();
+    await _audioPlayingSubscription.cancel();
+    await _quranAudioPlayerService.stop();
     await _recorder.dispose();
     return super.close();
   }
