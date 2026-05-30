@@ -19,6 +19,7 @@ from app.database import JobStatus
 from app.utils.audio_loader import load_audio_file
 from app.utils.audio_splitter import split_audio_by_ayahs
 from app.utils.debug_utils import DebugRecorder, is_debug_enabled
+from app.pipeline.config_loader import load_pipeline_config
 from app.pipeline.orchestrator import PipelineOrchestrator
 
 logger = logging.getLogger(__name__)
@@ -127,11 +128,12 @@ class BackgroundWorker:
             from app.inference.transcription import transcription_service
             
             # Create pipeline
+            pipeline_config = load_pipeline_config()
             pipeline = PipelineOrchestrator.create_full_pipeline(
                 model=transcription_service.model,
                 processor=transcription_service.processor,
                 device=transcription_service.device,
-                config={}
+                config=pipeline_config
             )
             
             # Execute pipeline

@@ -186,12 +186,23 @@ def _register_routes(app: FastAPI):
         
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
-        
+
+        # Backward-compatible "updated_at" for clients that expect it.
+        # The jobs table stores created_at / started_at / completed_at.
+        updated_at = (
+            job.get('updated_at')
+            or job.get('completed_at')
+            or job.get('started_at')
+            or job.get('created_at')
+        )
+
         response = {
             "job_id": job_id,
             "status": job['status'],
             "created_at": job['created_at'],
-            "updated_at": job['updated_at'],
+            "updated_at": updated_at,
+            "started_at": job.get('started_at'),
+            "completed_at": job.get('completed_at'),
             "original_filename": job['original_filename']
         }
         

@@ -1,0 +1,8 @@
+{
+  "verse_min_word_match_ratio": 0.75,
+  "verse_similarity_threshold": 0.7,
+  "verse_multi_chunk_similarity_floor": 0.6,
+  "verse_multi_ayah_similarity_threshold": 0.7,
+  "verse_multi_ayah_word_tolerance": 6,
+  "verse_allow_low_confidence_fallback": true
+}

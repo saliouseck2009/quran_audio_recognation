@@ -23,13 +23,144 @@ class VerseMatchingStep(PipelineStep):
     Note: Implement your own verse matching logic here.
     """
     
-    def __init__(self):
+    def __init__(
+        self,
+        similarity_threshold: float = 0.70,
+        min_word_match_ratio: float = 0.75,
+        multi_chunk_similarity_floor: float = 0.60,
+        multi_ayah_similarity_threshold: float = 0.70,
+        multi_ayah_word_tolerance: int = 2,
+        allow_low_confidence_fallback: bool = True,
+    ):
         """
         Initialize verse matching step.
         """
         super().__init__()
-        # Similarity threshold for SequenceMatcher fallback
-        self.SIMILARITY_THRESHOLD = 0.70  # 70% similarity minimum
+        # Similarity threshold for SequenceMatcher fallback.
+        self.SIMILARITY_THRESHOLD = similarity_threshold
+        # Ratio-based tolerance: 0.75 means "at least 75% words match".
+        self.MIN_WORD_MATCH_RATIO = min_word_match_ratio
+        # Lower floor used when testing multi-chunk combinations.
+        self.MULTI_CHUNK_SIMILARITY_FLOOR = multi_chunk_similarity_floor
+        # Multi-ayah special-case similarity cutoff.
+        self.MULTI_AYAH_SIMILARITY_THRESHOLD = multi_ayah_similarity_threshold
+        # Allowed extra words when trying to fit several ayahs in one chunk.
+        self.MULTI_AYAH_WORD_TOLERANCE = multi_ayah_word_tolerance
+        # If True, never fail hard when a verse was detected globally.
+        # We return best-effort verse mapping with lower confidence.
+        self.ALLOW_LOW_CONFIDENCE_FALLBACK = allow_low_confidence_fallback
+
+    @staticmethod
+    def _word_match_ratio(reference_text: str, candidate_text: str) -> float:
+        """
+        Compute word-level similarity ratio between verse text and candidate chunk text.
+        """
+        reference_words = reference_text.split()
+        candidate_words = candidate_text.split()
+
+        if not reference_words and not candidate_words:
+            return 1.0
+        if not reference_words or not candidate_words:
+            return 0.0
+
+        return SequenceMatcher(None, reference_words, candidate_words).ratio()
+
+    def _build_fallback_chunk_mapping(
+        self,
+        verses_in_range: list,
+        cleaned_transcriptions: list,
+        global_similarity: float,
+    ) -> list:
+        """
+        Build a best-effort chunk mapping when strict mapping fails.
+        """
+        if not verses_in_range:
+            return []
+
+        fallback_entries = []
+        if not cleaned_transcriptions:
+            # No chunks available: still return ayah metadata with zero timing.
+            for verse in verses_in_range:
+                fallback_entries.append({
+                    'chunk_index': -1,
+                    'chunk_start_time': 0.0,
+                    'chunk_end_time': 0.0,
+                    'chunk_text': '',
+                    'chunk_normalized_text': '',
+                    'matched_ayahs': [{
+                        'surah_number': verse['surah_number'],
+                        'ayah_number': verse['ayah_number'],
+                        'text': verse['text'],
+                        'text_normalized': verse['text_normalized'],
+                        'is_basmalah': verse['is_basmalah'],
+                        'start_from_word': verse.get('start_from_word', 1),
+                        'end_to_word': verse.get('end_to_word', verse['word_count']),
+                        'similarity': global_similarity,
+                    }],
+                    'similarity': global_similarity,
+                    'fallback_mapping': True,
+                })
+            return fallback_entries
+
+        # Map one verse to one closest chunk; if verses > chunks reuse last chunk.
+        for idx, verse in enumerate(verses_in_range):
+            chunk = cleaned_transcriptions[min(idx, len(cleaned_transcriptions) - 1)]
+            fallback_entries.append({
+                'chunk_index': chunk.get('chunk_index'),
+                'chunk_start_time': chunk.get('start_time'),
+                'chunk_end_time': chunk.get('end_time'),
+                'chunk_text': chunk.get('text'),
+                'chunk_normalized_text': chunk.get('normalized_text', ''),
+                'matched_ayahs': [{
+                    'surah_number': verse['surah_number'],
+                    'ayah_number': verse['ayah_number'],
+                    'text': verse['text'],
+                    'text_normalized': verse['text_normalized'],
+                    'is_basmalah': verse['is_basmalah'],
+                    'start_from_word': verse.get('start_from_word', 1),
+                    'end_to_word': verse.get('end_to_word', verse['word_count']),
+                    'similarity': global_similarity,
+                }],
+                'similarity': global_similarity,
+                'fallback_mapping': True,
+            })
+
+        return fallback_entries
+
+    def _finalize_chunk_mapping(
+        self,
+        context: PipelineContext,
+        matched_chunk_verses: list,
+        matched_ayahs: list,
+        match_boundaries: dict,
+        best_match,
+        results: list,
+        mapping_mode: str = "strict",
+        fallback_reason: str = "",
+    ) -> PipelineContext:
+        """
+        Store chunk mapping output in context and attach debug info.
+        """
+        context.matched_chunk_verses = matched_chunk_verses
+        self.logger.info(f"Mapped {len(matched_chunk_verses)} chunks to verses")
+
+        debug_payload = {
+            'total_verses': len(matched_ayahs),
+            'similarity': best_match.similarity,
+            'matched_ayahs': matched_ayahs,
+            'match_boundaries': match_boundaries,
+            'matched_text': best_match.matched_text,
+            'query_text': best_match.query_text,
+            'total_results': len(results),
+            'matched_chunk_verses': matched_chunk_verses,
+            'total_mapped_chunks': len(matched_chunk_verses),
+            'mapping_mode': mapping_mode,
+        }
+        if fallback_reason:
+            debug_payload['fallback_reason'] = fallback_reason
+
+        context.add_debug_info(self.name, debug_payload)
+        return context
     
     def validate_input(self, context: PipelineContext) -> bool:
         """Validate that transcription is present."""
@@ -46,7 +177,7 @@ class VerseMatchingStep(PipelineStep):
         1. Search Quran for best matching verses using combined transcription
         2. Extract verse details and boundaries from best match
         3. Map audio chunks to verses using word-count based matching
-        4. Validate that each verse gets the correct number of chunks (±1 word tolerance)
+        4. Validate that each verse reaches the required word-match ratio
         
         Returns:
             Context with matched_chunk_verses containing chunk-to-verse mappings
@@ -143,22 +274,51 @@ class VerseMatchingStep(PipelineStep):
         # Get cleaned transcriptions (chunks with duplicates removed)
         cleaned_transcriptions = context.cleaned_transcriptions
         
-        # Step 8: Prepare verses within the matched boundaries
-        # Only process verses that are within the start/end boundaries
+        # Step 8: Prepare verses within the matched boundaries.
+        # For first/last verses, apply start_word/end_word boundaries so we match
+        # only the recited segment (not the full ayah text).
         verses_in_range = []
+        start_position = (
+            match_boundaries['start_surah'],
+            match_boundaries['start_ayah'],
+        )
+        end_position = (
+            match_boundaries['end_surah'],
+            match_boundaries['end_ayah'],
+        )
+
         for verse in best_match.verses:
             verse_position = (verse.surah_number, verse.ayah_number)
-            start_position = (match_boundaries['start_surah'], match_boundaries['start_ayah'])
-            end_position = (match_boundaries['end_surah'], match_boundaries['end_ayah'])
             
             if start_position <= verse_position <= end_position:
+                verse_words = verse.text_normalized.split()
+                start_idx = 0
+                end_idx = len(verse_words)
+
+                if verse_position == start_position:
+                    raw_start_word = int(match_boundaries.get('start_word') or 1)
+                    start_idx = max(0, min(len(verse_words), raw_start_word - 1))
+
+                if verse_position == end_position:
+                    raw_end_word = int(match_boundaries.get('end_word') or len(verse_words))
+                    end_idx = max(start_idx, min(len(verse_words), raw_end_word))
+
+                bounded_words = verse_words[start_idx:end_idx] if verse_words else []
+                bounded_text_normalized = ' '.join(bounded_words).strip()
+                if not bounded_text_normalized:
+                    # Defensive fallback: if boundaries are out of range, keep full verse.
+                    bounded_text_normalized = verse.text_normalized
+                    bounded_words = verse_words
+
                 verses_in_range.append({
-                    'text_normalized': verse.text_normalized,
+                    'text_normalized': bounded_text_normalized,
                     'surah_number': verse.surah_number,
                     'ayah_number': verse.ayah_number,
                     'text': verse.text,
                     'is_basmalah': verse.is_basmalah,
-                    'word_count': len(verse.text_normalized.split())
+                    'word_count': len(bounded_words),
+                    'start_from_word': start_idx + 1,
+                    'end_to_word': start_idx + len(bounded_words),
                 })
         
         self.logger.info(f"Found {len(verses_in_range)} verses in range")
@@ -173,61 +333,48 @@ class VerseMatchingStep(PipelineStep):
             verse = verses_in_range[verse_idx]
             verse_word_count = verse['word_count']
             verse_key = f"Surah {verse['surah_number']}:Ayah {verse['ayah_number']}"
+            verse_start_chunk_index = chunk_index
             
             self.logger.debug(f"Processing {verse_key} ({verse_word_count} words)")
             
-            # Step 10: Collect chunks for this verse based on word count
-            # Keep adding chunks until we match the verse word count (±1 word tolerance)
+            # Step 10: Collect chunks for this verse.
+            # Keep adding chunks until we reach the required word-match ratio.
             verse_chunks = []
             total_chunk_words = 0
             chunks_used = []  # For logging/debugging
+            chunk_similarity_ratio = 0.0
             
-            # Try word-count based matching first
+            # Try sequential chunk accumulation first.
             while chunk_index < len(cleaned_transcriptions):
                 chunk = cleaned_transcriptions[chunk_index]
                 chunk_normalized = chunk.get('normalized_text', '')
                 chunk_word_count = len(chunk_normalized.split())
-                
-                # Calculate what the total would be if we add this chunk
-                potential_total = total_chunk_words + chunk_word_count
-                
-                # Check if adding this chunk would exceed the verse word count
-                difference = potential_total - verse_word_count
-                
-                if difference > 1:
-                    # Adding this chunk would exceed by more than 1 word
-                    # Example: verse=10 words, current_total=5, chunk=7 → total=12 (diff=+2, too much)
-                    if not verse_chunks:
-                        # Edge case: First chunk is already too big, but we need at least one chunk
-                        verse_chunks.append(chunk)
-                        chunks_used.append(f"Chunk {chunk.get('chunk_index')} ({chunk_word_count} words)")
-                        total_chunk_words = chunk_word_count
-                        chunk_index += 1
-                    # Stop adding more chunks (use fewer chunks to stay within tolerance)
+                verse_chunks.append(chunk)
+                chunks_used.append(
+                    f"Chunk {chunk.get('chunk_index')} ({chunk_word_count} words)"
+                )
+                total_chunk_words += chunk_word_count
+                chunk_index += 1
+
+                combined_text = ' '.join(
+                    c.get('normalized_text', '') for c in verse_chunks
+                )
+                chunk_similarity_ratio = self._word_match_ratio(
+                    verse['text_normalized'],
+                    combined_text,
+                )
+
+                if chunk_similarity_ratio >= self.MIN_WORD_MATCH_RATIO:
                     break
-                else:
-                    # Safe to add this chunk (difference is negative, 0, or 1)
-                    # Example: verse=10, current=5, chunk=4 → total=9 (diff=-1, OK)
-                    # Example: verse=10, current=5, chunk=5 → total=10 (diff=0, perfect)
-                    # Example: verse=10, current=9, chunk=2 → total=11 (diff=+1, OK)
-                    verse_chunks.append(chunk)
-                    chunks_used.append(f"Chunk {chunk.get('chunk_index')} ({chunk_word_count} words)")
-                    total_chunk_words = potential_total
-                    chunk_index += 1
-                    
-                    # If we've matched exactly or within 1 word, stop
-                    if abs(verse_word_count - total_chunk_words) <= 1:
-                        break
-            
-            # Step 11: Validate the match
-            # Ensure the total chunk words match the verse word count within ±1 tolerance
+
+            # Step 11: Validate the match (ratio-based).
             final_difference = total_chunk_words - verse_word_count
             
-            if abs(final_difference) > 1:
-                # Word count tolerance failed - try SequenceMatcher approach
+            if chunk_similarity_ratio < self.MIN_WORD_MATCH_RATIO:
+                # Ratio tolerance failed - try SequenceMatcher approach
                 self.logger.warning(
-                    f"Word count mismatch for {verse_key}: {total_chunk_words} vs {verse_word_count} "
-                    f"(diff: {final_difference}). Trying SequenceMatcher..."
+                    f"Low word-match ratio for {verse_key}: {chunk_similarity_ratio:.2%} "
+                    f"(required: {self.MIN_WORD_MATCH_RATIO:.2%}). Trying SequenceMatcher..."
                 )
                 
                 # Try different chunk combinations using SequenceMatcher
@@ -243,6 +390,7 @@ class VerseMatchingStep(PipelineStep):
                     verse_chunks = best_match_result['chunks']
                     total_chunk_words = best_match_result['total_words']
                     final_difference = total_chunk_words - verse_word_count
+                    chunk_similarity_ratio = best_match_result['similarity']
                     chunks_used = [f"Chunk {c.get('chunk_index')} ({len(c.get('normalized_text', '').split())} words)" 
                                    for c in verse_chunks]
                     chunk_index = best_match_result['end_index']
@@ -281,14 +429,39 @@ class VerseMatchingStep(PipelineStep):
                         # Continue to next iteration (skip normal processing)
                         continue
                     else:
-                        # Really failed - throw error
+                        # Really failed in strict mode.
                         error_msg = (
                             f"ERROR: Failed to match {verse_key} ({verse_word_count} words).\n"
                             f"Chunks used: {', '.join(chunks_used)}\n"
                             f"Total chunk words: {total_chunk_words}\n"
-                            f"Difference: {final_difference} words (allowed: ±1 word)\n"
+                            f"Difference: {final_difference} words\n"
+                            f"Word-match ratio: {chunk_similarity_ratio:.2%} "
+                            f"(required: {self.MIN_WORD_MATCH_RATIO:.2%})\n"
                             f"Verse text: {verse['text_normalized'][:100]}..."
                         )
+                        if self.ALLOW_LOW_CONFIDENCE_FALLBACK:
+                            self.logger.warning(
+                                "Strict verse mapping failed; returning best-effort fallback mapping: %s",
+                                error_msg.replace("\n", " | "),
+                            )
+                            remaining_verses = verses_in_range[verse_idx:]
+                            remaining_chunks = cleaned_transcriptions[verse_start_chunk_index:]
+                            fallback_entries = self._build_fallback_chunk_mapping(
+                                verses_in_range=remaining_verses,
+                                cleaned_transcriptions=remaining_chunks,
+                                global_similarity=best_match.similarity,
+                            )
+                            return self._finalize_chunk_mapping(
+                                context=context,
+                                matched_chunk_verses=matched_chunk_verses + fallback_entries,
+                                matched_ayahs=matched_ayahs,
+                                match_boundaries=match_boundaries,
+                                best_match=best_match,
+                                results=results,
+                                mapping_mode="fallback",
+                                fallback_reason=error_msg,
+                            )
+
                         self.logger.error(error_msg)
                         raise ValueError(error_msg)
             
@@ -298,18 +471,43 @@ class VerseMatchingStep(PipelineStep):
                     f"ERROR: No chunks available for {verse_key} ({verse_word_count} words).\n"
                     f"All chunks may have been consumed by previous verses."
                 )
+                if self.ALLOW_LOW_CONFIDENCE_FALLBACK:
+                    self.logger.warning(
+                        "No chunks left for strict mapping; returning fallback mapping: %s",
+                        error_msg.replace("\n", " | "),
+                    )
+                    remaining_verses = verses_in_range[verse_idx:]
+                    remaining_chunks = cleaned_transcriptions[chunk_index:]
+                    fallback_entries = self._build_fallback_chunk_mapping(
+                        verses_in_range=remaining_verses,
+                        cleaned_transcriptions=remaining_chunks,
+                        global_similarity=best_match.similarity,
+                    )
+                    return self._finalize_chunk_mapping(
+                        context=context,
+                        matched_chunk_verses=matched_chunk_verses + fallback_entries,
+                        matched_ayahs=matched_ayahs,
+                        match_boundaries=match_boundaries,
+                        best_match=best_match,
+                        results=results,
+                        mapping_mode="fallback",
+                        fallback_reason=error_msg,
+                    )
+
                 self.logger.error(error_msg)
                 raise ValueError(error_msg)
             
             # Step 12: Create matched verse entry
             # Store verse metadata for each chunk that belongs to this verse
-            matched_ayahs = [{
+            chunk_matched_ayahs = [{
                 'surah_number': verse['surah_number'],
                 'ayah_number': verse['ayah_number'],
                 'text': verse['text'],
                 'text_normalized': verse['text_normalized'],
                 'is_basmalah': verse['is_basmalah'],
-                'similarity': 100  # Word-count based matching (not fuzzy)
+                'start_from_word': verse.get('start_from_word', 1),
+                'end_to_word': verse.get('end_to_word', verse['word_count']),
+                'similarity': chunk_similarity_ratio * 100
             }]
             
             # Step 13: Add entry for each chunk that belongs to this verse
@@ -321,35 +519,28 @@ class VerseMatchingStep(PipelineStep):
                     'chunk_end_time': chunk.get('end_time'),
                     'chunk_text': chunk.get('text'),
                     'chunk_normalized_text': chunk.get('normalized_text', ''),
-                    'matched_ayahs': matched_ayahs,
-                    'similarity': 100
+                    'matched_ayahs': chunk_matched_ayahs,
+                    'similarity': chunk_similarity_ratio * 100
                 })
             
             self.logger.info(
                 f"{verse_key}: Matched {len(verse_chunks)} chunk(s), "
-                f"total {total_chunk_words} words (verse: {verse_word_count} words, diff: {final_difference:+d})"
+                f"total {total_chunk_words} words (verse: {verse_word_count} words, "
+                f"diff: {final_difference:+d}, ratio: {chunk_similarity_ratio:.2%})"
             )
             
             # Move to next verse
             verse_idx += 1
         
-        context.matched_chunk_verses = matched_chunk_verses
-        
-        self.logger.info(f"Mapped {len(matched_chunk_verses)} chunks to verses")
-        
-        context.add_debug_info(self.name, {
-            'total_verses': len(matched_ayahs),
-            'similarity': best_match.similarity,
-            'matched_ayahs': matched_ayahs,
-            'match_boundaries': match_boundaries,
-            'matched_text': best_match.matched_text,
-            'query_text': best_match.query_text,
-            'total_results': len(results),
-            'matched_chunk_verses': matched_chunk_verses,
-            'total_mapped_chunks': len(matched_chunk_verses)
-        })
-        
-        return context
+        return self._finalize_chunk_mapping(
+            context=context,
+            matched_chunk_verses=matched_chunk_verses,
+            matched_ayahs=matched_ayahs,
+            match_boundaries=match_boundaries,
+            best_match=best_match,
+            results=results,
+            mapping_mode="strict",
+        )
     
     def _find_best_chunk_match(self, verse_text: str, chunks: list, start_idx: int, target_word_count: int) -> dict:
         """
@@ -405,8 +596,11 @@ class VerseMatchingStep(PipelineStep):
             # Lower threshold for multi-chunk combinations (partial ayahs)
             effective_threshold = self.SIMILARITY_THRESHOLD
             if num_chunks > 1:
-                # For partial ayah cases, accept lower similarity
-                effective_threshold = max(0.6, self.SIMILARITY_THRESHOLD - 0.1)
+                # For partial ayah cases, accept a lower configurable floor.
+                effective_threshold = max(
+                    self.MULTI_CHUNK_SIMILARITY_FLOOR,
+                    self.SIMILARITY_THRESHOLD - 0.1
+                )
             
             if similarity >= effective_threshold:
                 if best_match is None:
@@ -482,7 +676,7 @@ class VerseMatchingStep(PipelineStep):
             potential_total = total_verse_words + verse['word_count']
             
             # Check if adding this verse would still fit in the chunk
-            if potential_total <= chunk_word_count + 2:  # Allow small tolerance
+            if potential_total <= chunk_word_count + self.MULTI_AYAH_WORD_TOLERANCE:
                 verses_fitted.append(verse)
                 total_verse_words = potential_total
             else:
@@ -520,7 +714,7 @@ class VerseMatchingStep(PipelineStep):
                 f"(chunk: {len(chunk_words)} words, combined: {len(combined_words)} words)"
             )
         
-        if similarity < 0.70:  # Lowered threshold to handle partial matches
+        if similarity < self.MULTI_AYAH_SIMILARITY_THRESHOLD:
             self.logger.warning(
                 f"Multi-ayah similarity too low: {similarity:.2%} for {len(verses_fitted)} verses"
             )

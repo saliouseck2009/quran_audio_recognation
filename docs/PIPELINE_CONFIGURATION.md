@@ -130,6 +130,17 @@ pipeline = PipelineOrchestrator.create_full_pipeline(
 | `min_chunk_duration` | float | 3.0 | `PIPELINE_MIN_CHUNK_DURATION` | Minimum chunk duration in seconds |
 | `min_silence_gap` | float | 0.5 | `PIPELINE_MIN_SILENCE_GAP` | Minimum silence gap between chunks in seconds |
 
+### Verse Matching
+
+| Parameter | Type | Default | Env Variable | Description |
+|-----------|------|---------|--------------|-------------|
+| `verse_min_word_match_ratio` | float | 0.75 | `PIPELINE_VERSE_MIN_WORD_MATCH_RATIO` | Minimum word-level match ratio to accept chunk→ayah mapping |
+| `verse_similarity_threshold` | float | 0.70 | `PIPELINE_VERSE_SIMILARITY_THRESHOLD` | Base SequenceMatcher threshold |
+| `verse_multi_chunk_similarity_floor` | float | 0.60 | `PIPELINE_VERSE_MULTI_CHUNK_SIMILARITY_FLOOR` | Lower similarity floor for multi-chunk partial ayah cases |
+| `verse_multi_ayah_similarity_threshold` | float | 0.70 | `PIPELINE_VERSE_MULTI_AYAH_SIMILARITY_THRESHOLD` | Similarity floor for multi-ayah-in-single-chunk handling |
+| `verse_multi_ayah_word_tolerance` | int | 2 | `PIPELINE_VERSE_MULTI_AYAH_WORD_TOLERANCE` | Extra words tolerated when fitting multiple ayahs into one chunk |
+| `verse_allow_low_confidence_fallback` | bool | true | `PIPELINE_VERSE_ALLOW_LOW_CONFIDENCE_FALLBACK` | Return best-effort mapping instead of failing when strict per-ayah mapping fails |
+
 ## Examples
 
 ### Example 1: Development vs Production
@@ -145,6 +156,16 @@ PIPELINE_SILENCE_THRESH=-35   # More sensitive
 PIPELINE_MIN_SILENCE_LEN=500  # Conservative splitting
 PIPELINE_SILENCE_THRESH=-40   # Less sensitive
 ```
+
+### Example 1b: Verse tolerance by ratio
+
+```bash
+PIPELINE_VERSE_MIN_WORD_MATCH_RATIO=0.75
+PIPELINE_VERSE_ALLOW_LOW_CONFIDENCE_FALLBACK=true
+```
+
+This means a verse is accepted when ~75% of words match.
+When fallback is enabled, the job still returns detected verses even if strict chunk-to-ayah mapping fails.
 
 ### Example 2: Different Audio Types
 

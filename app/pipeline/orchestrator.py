@@ -116,6 +116,12 @@ class PipelineOrchestrator:
             PIPELINE_KEEP_SILENCE - Silence padding in ms (default: 200)
             PIPELINE_MIN_CHUNK_DURATION - Min chunk duration in seconds (default: 3.0)
             PIPELINE_MIN_SILENCE_GAP - Min silence gap in seconds (default: 0.5)
+            PIPELINE_VERSE_SIMILARITY_THRESHOLD - Base verse similarity floor (default: 0.70)
+            PIPELINE_VERSE_MIN_WORD_MATCH_RATIO - Word-match ratio required per verse (default: 0.75)
+            PIPELINE_VERSE_MULTI_CHUNK_SIMILARITY_FLOOR - Multi-chunk similarity floor (default: 0.60)
+            PIPELINE_VERSE_MULTI_AYAH_SIMILARITY_THRESHOLD - Multi-ayah similarity floor (default: 0.70)
+            PIPELINE_VERSE_MULTI_AYAH_WORD_TOLERANCE - Extra word tolerance in multi-ayah mode (default: 2)
+            PIPELINE_VERSE_ALLOW_LOW_CONFIDENCE_FALLBACK - Return best-effort mapping instead of failing (default: true)
         """
         config = config or {}
         
@@ -171,7 +177,14 @@ class PipelineOrchestrator:
         pipeline.add_step(TranscriptionCombiningStep())
         
         # Step 7: Verse Matching
-        pipeline.add_step(VerseMatchingStep())
+        pipeline.add_step(VerseMatchingStep(
+            similarity_threshold=get_config('verse_similarity_threshold', 0.70, float),
+            min_word_match_ratio=get_config('verse_min_word_match_ratio', 0.75, float),
+            multi_chunk_similarity_floor=get_config('verse_multi_chunk_similarity_floor', 0.60, float),
+            multi_ayah_similarity_threshold=get_config('verse_multi_ayah_similarity_threshold', 0.70, float),
+            multi_ayah_word_tolerance=get_config('verse_multi_ayah_word_tolerance', 2, int),
+            allow_low_confidence_fallback=get_config('verse_allow_low_confidence_fallback', True, bool),
+        ))
         
         # Step 7.5: Transcription Alignment (Word-level timestamps)
         alignment_method = get_config('alignment_method', 'wav2vec2', str)
@@ -248,7 +261,14 @@ class PipelineOrchestrator:
             ),
             'DuplicateRemovalStep': lambda: DuplicateRemovalStep(),
             'TranscriptionCombiningStep': lambda: TranscriptionCombiningStep(),
-            'VerseMatchingStep': lambda: VerseMatchingStep(),
+            'VerseMatchingStep': lambda: VerseMatchingStep(
+                similarity_threshold=get_config('verse_similarity_threshold', 0.70, float),
+                min_word_match_ratio=get_config('verse_min_word_match_ratio', 0.75, float),
+                multi_chunk_similarity_floor=get_config('verse_multi_chunk_similarity_floor', 0.60, float),
+                multi_ayah_similarity_threshold=get_config('verse_multi_ayah_similarity_threshold', 0.70, float),
+                multi_ayah_word_tolerance=get_config('verse_multi_ayah_word_tolerance', 2, int),
+                allow_low_confidence_fallback=get_config('verse_allow_low_confidence_fallback', True, bool),
+            ),
             'TranscriptionAlignmentStep': lambda: TranscriptionAlignmentStep(
                 alignment_method=get_config('alignment_method', 'wav2vec2', str),
                 language=get_config('alignment_language', 'ar', str)

@@ -120,6 +120,22 @@ make info       # Show project information
 
 Run `make` or `make help` to see all available commands with descriptions.
 
+### Verse Tolerance Configuration
+
+You can tune verse matching tolerance using a JSON config file.
+
+```bash
+cp config/pipeline_config.example.json config/pipeline_config.json
+```
+
+Main parameter:
+- `verse_min_word_match_ratio`
+  - default: `0.75`
+  - means a verse can be accepted when ~75% of words match
+- `verse_allow_low_confidence_fallback`
+  - default: `true`
+  - if strict chunk→ayah mapping fails but global verse detection succeeded, return a best-effort result instead of failing the job
+
 ### API Endpoints
 
 #### 1. Root Endpoint
