@@ -68,3 +68,7 @@ logs/
 frontend/node_modules/
 frontend/dist/
 app/static/
+
+# Flutter module source should stay tracked.
+!ayat_finder/lib/
+!ayat_finder/lib/**

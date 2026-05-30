@@ -8,10 +8,11 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:ayat_finder/core/di/service_locator.dart';
 import 'package:ayat_finder/src/app.dart';
 
 void main() {
-  testWidgets('Ayat Finder renders onboarding by default', (
+  testWidgets('Ayat Finder renders app shell', (
     WidgetTester tester,
   ) async {
     tester.view.devicePixelRatio = 1.0;
@@ -19,7 +20,10 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
+    await setupDependencies();
     await tester.pumpWidget(const AyatFinderApp());
-    expect(find.text('Autoriser le microphone'), findsOneWidget);
+    await tester.pump();
+
+    expect(find.text('ayat detector'), findsOneWidget);
   });
 }
