@@ -1,8 +1,9 @@
 part of 'home_page.dart';
 
 class _AppHeader extends StatelessWidget {
-  const _AppHeader({this.actionIcon, this.onAction});
+  const _AppHeader({this.onMenuTap, this.actionIcon, this.onAction});
 
+  final VoidCallback? onMenuTap;
   final IconData? actionIcon;
   final VoidCallback? onAction;
 
@@ -19,6 +20,21 @@ class _AppHeader extends StatelessWidget {
           ),
         ),
         const Spacer(),
+        if (onMenuTap != null)
+          InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: onMenuTap,
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: const BoxDecoration(
+                color: Color(0xFFEEF0EE),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.menu_rounded, color: Color(0xFF39484D)),
+            ),
+          ),
+        if (onMenuTap != null) const SizedBox(width: 8),
         if (actionIcon != null)
           InkWell(
             borderRadius: BorderRadius.circular(18),
@@ -39,16 +55,17 @@ class _AppHeader extends StatelessWidget {
 }
 
 class _OnboardingView extends StatelessWidget {
-  const _OnboardingView({required this.controller});
+  const _OnboardingView({required this.controller, required this.onOpenDrawer});
 
   final HomeCubit controller;
+  final VoidCallback onOpenDrawer;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.only(bottom: 12),
       children: [
-        const _AppHeader(),
+        _AppHeader(onMenuTap: onOpenDrawer),
         const SizedBox(height: 26),
         const _OrbWidget(size: 150),
         const SizedBox(height: 46),
@@ -112,9 +129,10 @@ class _OnboardingView extends StatelessWidget {
 }
 
 class _IdleView extends StatelessWidget {
-  const _IdleView({required this.controller});
+  const _IdleView({required this.controller, required this.onOpenDrawer});
 
   final HomeCubit controller;
+  final VoidCallback onOpenDrawer;
 
   @override
   Widget build(BuildContext context) {
@@ -122,8 +140,7 @@ class _IdleView extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       children: [
         _AppHeader(
-          actionIcon: Icons.settings_outlined,
-          onAction: controller.openSettings,
+          onMenuTap: onOpenDrawer,
         ),
         const SizedBox(height: 40),
         const Align(
@@ -196,9 +213,10 @@ class _IdleView extends StatelessWidget {
 }
 
 class _RecordingView extends StatelessWidget {
-  const _RecordingView({required this.controller});
+  const _RecordingView({required this.controller, required this.onOpenDrawer});
 
   final HomeCubit controller;
+  final VoidCallback onOpenDrawer;
 
   @override
   Widget build(BuildContext context) {
@@ -206,6 +224,7 @@ class _RecordingView extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       children: [
         _AppHeader(
+          onMenuTap: onOpenDrawer,
           actionIcon: Icons.settings_outlined,
           onAction: controller.openSettings,
         ),
@@ -281,9 +300,10 @@ class _RecordingView extends StatelessWidget {
 }
 
 class _AnalyzingView extends StatelessWidget {
-  const _AnalyzingView({required this.controller});
+  const _AnalyzingView({required this.controller, required this.onOpenDrawer});
 
   final HomeCubit controller;
+  final VoidCallback onOpenDrawer;
 
   @override
   Widget build(BuildContext context) {
@@ -291,6 +311,7 @@ class _AnalyzingView extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       children: [
         _AppHeader(
+          onMenuTap: onOpenDrawer,
           actionIcon: Icons.settings_outlined,
           onAction: controller.openSettings,
         ),
@@ -334,9 +355,10 @@ class _AnalyzingView extends StatelessWidget {
 }
 
 class _ResultView extends StatelessWidget {
-  const _ResultView({required this.controller});
+  const _ResultView({required this.controller, required this.onOpenDrawer});
 
   final HomeCubit controller;
+  final VoidCallback onOpenDrawer;
 
   @override
   Widget build(BuildContext context) {
@@ -352,6 +374,7 @@ class _ResultView extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _AppHeader(
+          onMenuTap: onOpenDrawer,
           actionIcon: Icons.settings_outlined,
           onAction: controller.openSettings,
         ),
@@ -452,6 +475,34 @@ class _ResultView extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => MushafPage(
+                    ayahs: ayahs,
+                    title: 'Mushaf',
+                    subtitle: '$surah · $subtitle',
+                  ),
+                ),
+              );
+            },
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(30),
+              ),
+            ),
+            icon: const Icon(Icons.menu_book_rounded),
+            label: const Text(
+              'Ouvrir dans le Mushaf',
+              style: TextStyle(fontSize: 18),
+            ),
+          ),
+        ),
         if (controller.errorMessage != null) ...[
           const SizedBox(height: 6),
           Text(
@@ -483,9 +534,10 @@ class _ResultView extends StatelessWidget {
 }
 
 class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.controller});
+  const _ErrorView({required this.controller, required this.onOpenDrawer});
 
   final HomeCubit controller;
+  final VoidCallback onOpenDrawer;
 
   @override
   Widget build(BuildContext context) {
@@ -493,6 +545,7 @@ class _ErrorView extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       children: [
         _AppHeader(
+          onMenuTap: onOpenDrawer,
           actionIcon: Icons.settings_outlined,
           onAction: controller.openSettings,
         ),
@@ -580,9 +633,10 @@ class _ErrorView extends StatelessWidget {
 }
 
 class _HistoryView extends StatelessWidget {
-  const _HistoryView({required this.controller});
+  const _HistoryView({required this.controller, required this.onOpenDrawer});
 
   final HomeCubit controller;
+  final VoidCallback onOpenDrawer;
 
   @override
   Widget build(BuildContext context) {
@@ -590,6 +644,7 @@ class _HistoryView extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _AppHeader(
+          onMenuTap: onOpenDrawer,
           actionIcon: Icons.settings_outlined,
           onAction: controller.openSettings,
         ),
@@ -646,9 +701,10 @@ class _HistoryView extends StatelessWidget {
 }
 
 class _SettingsView extends StatelessWidget {
-  const _SettingsView({required this.controller});
+  const _SettingsView({required this.controller, required this.onOpenDrawer});
 
   final HomeCubit controller;
+  final VoidCallback onOpenDrawer;
 
   @override
   Widget build(BuildContext context) {
@@ -656,6 +712,7 @@ class _SettingsView extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _AppHeader(
+          onMenuTap: onOpenDrawer,
           actionIcon: Icons.close_rounded,
           onAction: controller.backToIdle,
         ),
