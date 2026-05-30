@@ -252,7 +252,7 @@ class HomeCubit extends Cubit<HomeState> {
         ayahs: result.ayahs,
         reciterId: selectedReciterId,
       );
-      emit(state.copyWith(isAudioLoading: false, isResultAudioPlaying: true));
+      emit(state.copyWith(isAudioLoading: false));
     } on AppException catch (exception) {
       emit(
         state.copyWith(

@@ -58,7 +58,7 @@ class QuranAudioPlayerService {
 
     await _audioPlayer.stop();
     await _audioPlayer.setAudioSources(sources);
-    await _audioPlayer.play();
+    unawaited(_audioPlayer.play());
   }
 
   Future<void> stop() async {

@@ -139,9 +139,7 @@ class _IdleView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.only(bottom: 12),
       children: [
-        _AppHeader(
-          onMenuTap: onOpenDrawer,
-        ),
+        _AppHeader(onMenuTap: onOpenDrawer),
         const SizedBox(height: 40),
         const Align(
           alignment: Alignment.centerLeft,
@@ -201,12 +199,6 @@ class _IdleView extends StatelessWidget {
           style: TextStyle(fontSize: 16, color: Color(0xFF7D8588)),
         ),
         const SizedBox(height: 14),
-        TextButton.icon(
-          onPressed: controller.openHistory,
-          icon: const Icon(Icons.history_rounded),
-          label: const Text('Voir l’historique'),
-        ),
-        const SizedBox(height: 10),
       ],
     );
   }
@@ -225,7 +217,7 @@ class _RecordingView extends StatelessWidget {
       children: [
         _AppHeader(
           onMenuTap: onOpenDrawer,
-          actionIcon: Icons.settings_outlined,
+          //actionIcon: Icons.settings_outlined,
           onAction: controller.openSettings,
         ),
         const SizedBox(height: 26),
@@ -312,7 +304,7 @@ class _AnalyzingView extends StatelessWidget {
       children: [
         _AppHeader(
           onMenuTap: onOpenDrawer,
-          actionIcon: Icons.settings_outlined,
+          //actionIcon: Icons.settings_outlined,
           onAction: controller.openSettings,
         ),
         const SizedBox(height: 24),
@@ -375,7 +367,7 @@ class _ResultView extends StatelessWidget {
       children: [
         _AppHeader(
           onMenuTap: onOpenDrawer,
-          actionIcon: Icons.settings_outlined,
+          //actionIcon: Icons.settings_outlined,
           onAction: controller.openSettings,
         ),
         const SizedBox(height: 26),
@@ -546,7 +538,7 @@ class _ErrorView extends StatelessWidget {
       children: [
         _AppHeader(
           onMenuTap: onOpenDrawer,
-          actionIcon: Icons.settings_outlined,
+          //actionIcon: Icons.settings_outlined,
           onAction: controller.openSettings,
         ),
         const SizedBox(height: 26),
@@ -645,7 +637,7 @@ class _HistoryView extends StatelessWidget {
       children: [
         _AppHeader(
           onMenuTap: onOpenDrawer,
-          actionIcon: Icons.settings_outlined,
+          //actionIcon: Icons.settings_outlined,
           onAction: controller.openSettings,
         ),
         const SizedBox(height: 24),
